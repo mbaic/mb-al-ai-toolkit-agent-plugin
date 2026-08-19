@@ -1,0 +1,52 @@
+name: Validate manifests
+
+# This repository ships no application code, so there is nothing to build or
+# publish. What can break is the manifests disagreeing with each other, or the
+# skill declaring something Copilot will silently ignore. That is what this
+# checks, on every change that can affect it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/plugin/**'
+      - '.github/workflows/validate.yml'
+      - 'plugins/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'README.md'
+  pull_request:
+    paths:
+      - '.github/plugin/**'
+      - '.github/workflows/validate.yml'
+      - 'plugins/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate marketplace, plugin, MCP server, and skill
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # Both scripts are dependency-free by design, so there is no install step.
+      - name: Validate the package
+        run: python3 scripts/validate.py
+
+      # The validator stands in for a test suite here, so the validator needs one.
+      # Each case gives a copy of the package one deliberate defect and checks
+      # that the validator rejects it.
+      - name: Test the validator
+        run: python3 tests/run.py

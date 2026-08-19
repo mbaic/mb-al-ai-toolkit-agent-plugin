@@ -1,0 +1,3 @@
+# Python bytecode, produced by importing scripts/ during local testing
+__pycache__/
+*.py[cod]

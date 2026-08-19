@@ -1,0 +1,137 @@
+name: Release
+
+# Cuts a tag and a GitHub Release for a version. Run it from the Actions tab:
+# Actions -> Release -> Run workflow -> enter the version (e.g. 1.0.0).
+#
+# It refuses to tag anything that is not already consistent: the manifests must
+# validate, all three version fields must declare the version being released, the
+# CHANGELOG must have a section for it, and the tag must not already exist. That
+# way a tag always means "this exact state was coherent", rather than "someone ran
+# the job".
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without the leading v (e.g. 1.0.0)'
+        required: true
+        type: string
+      draft:
+        description: 'Create the release as a draft (review before publishing)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need full history and existing tags
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Normalize the version
+        id: version
+        run: |
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$VERSION' is not a semantic version (expected e.g. 1.0.0)."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate manifests
+        run: python3 scripts/validate.py
+
+      - name: Check the manifests declare this version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+
+          version = os.environ["VERSION"]
+          plugin = json.load(open("plugins/bc-al-toolkit/plugin.json"))
+          marketplace = json.load(open(".github/plugin/marketplace.json"))
+          entry = marketplace["plugins"][0]
+          metadata = marketplace.get("metadata", {})
+
+          problems = []
+          if plugin.get("version") != version:
+              problems.append(f"plugin.json says {plugin.get('version')!r}")
+          if entry.get("version") != version:
+              problems.append(f"the marketplace plugin entry says {entry.get('version')!r}")
+          if metadata.get("version") != version:
+              problems.append(f"marketplace metadata.version says {metadata.get('version')!r}")
+
+          if problems:
+              print(
+                  f"::error::Releasing {version} but " + "; ".join(problems) +
+                  ". Bump the manifests first — a tag must match what the manifests claim."
+              )
+              sys.exit(1)
+
+          print(f"manifests agree on {version}")
+          PY
+
+      - name: Refuse to overwrite an existing tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::Tag $TAG already exists. Releases are immutable — bump the version instead."
+            exit 1
+          fi
+          echo "$TAG is free"
+
+      - name: Extract release notes from the CHANGELOG
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 scripts/release_notes.py "$VERSION" > release-notes.md
+          echo "--- release notes ---"
+          cat release-notes.md
+
+      - name: Create the annotated tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG" -m "$(cat release-notes.md)"
+          git push origin "$TAG"
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          if [ "$DRAFT" = "true" ]; then
+            gh release create "$TAG" --title "$TAG" --notes-file release-notes.md --draft
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file release-notes.md
+          fi
+
+      - name: Summary
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          {
+            echo "### Released \`$TAG\`"
+            echo
+            echo "- Tag: [\`$TAG\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG)"
+            echo "- Commit: \`$GITHUB_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"

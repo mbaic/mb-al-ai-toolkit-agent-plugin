@@ -1,0 +1,19 @@
+{
+  "name": "mb-al-ai-toolkit-agent-plugin",
+  "owner": {
+    "name": "Milos Baic",
+    "email": "bc-tooling@example.com"
+  },
+  "metadata": {
+    "description": "A Business Central AL code review skill and a read-only Microsoft Learn MCP server, built on Agent Plugins 1.0.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "bc-al-toolkit",
+      "description": "AL-aware code review skill and read-only Microsoft Learn documentation lookup for Business Central pull requests.",
+      "version": "1.0.0",
+      "source": "./plugins/bc-al-toolkit"
+    }
+  ]
+}

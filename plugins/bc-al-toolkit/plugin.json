@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "bc-al-toolkit",
+  "description": "AL-aware code review skill and read-only Microsoft Learn documentation lookup for Business Central pull requests.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Milos Baic"
+  },
+  "homepage": "https://github.com/mbaic/mb-al-ai-toolkit-agent-plugin",
+  "repository": "https://github.com/mbaic/mb-al-ai-toolkit-agent-plugin",
+  "license": "MIT",
+  "keywords": [
+    "business-central",
+    "al",
+    "code-review",
+    "al-go",
+    "microsoft-learn",
+    "copilot",
+    "agent-plugins"
+  ]
+}
